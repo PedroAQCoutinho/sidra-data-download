@@ -27,6 +27,10 @@ class DownloadWorker(Thread):
             engine, schema, bd_table, api_query, match_pattern, rename_array, tabela, order, geo_adm  = self.queue.get()
             try:
                 database_upload(engine = engine, schema = schema, bd_table=bd_table, api_query = api_query, match_pattern = match_pattern, rename_array = rename_array, tabela = tabela, order = order, geo_adm = geo_adm)
+                logger.debug(f'Run successfull - {api_query}')
+            except BaseException as e:
+                print(f'Erro at {url}')
+                logger.debug(f'Run unsuccessful - {api_query}')
             finally:
                 self.queue.task_done()
 
@@ -46,8 +50,7 @@ def main(bd_table):
         worker.start()
    
     for link in config_file['api-links']:
-        for geo_adm in config_file['geo_adm']:
-            
+        for geo_adm in config_file['geo_adm']:      
 
             api_query = 'http://api.sidra.ibge.gov.br/values/' + \
             link.replace('{geo_adm}',str(geo_adm))   
@@ -66,7 +69,7 @@ def main(bd_table):
                         'Grupos de área': 'id_grupo_area_total'}
 
             queue.put((engine, schema, bd_table, api_query, match_pattern, rename_array, tabela, order, geo_adm))
-            logging.debug(f'Run - {api_query}')
+            
        
     queue.join()
         
@@ -96,7 +99,6 @@ logger.addHandler(file_handler)
 
 if __name__ == '__main__':
     t = time()
-
     main(bd_table)
     print('Took %s seconds', time() - t)
 

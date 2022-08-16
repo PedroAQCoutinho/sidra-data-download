@@ -12,7 +12,7 @@ from sqlalchemy.pool import NullPool
 
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.ERROR)
 formatter = logging.Formatter('%(levelname)s:%(name)s:%(message)s')
 file_handler = logging.FileHandler('functions.log')
 file_handler.setFormatter(formatter)
@@ -64,10 +64,10 @@ def fetch_data(url):
             df = df
             df.columns = df.loc[0,:].to_list()
             df = df.loc[1:, :]
-            logger.info(f"Fetch successfull at URL {url}")
+            #logger.info(f"Fetch successfull at URL {url}")
             return df                    
         except requests.exceptions.HTTPError as e:
-            print(f'ERROR {e} at {url}')
+            return f'fetch error at {url}'
 
 
 
@@ -80,7 +80,7 @@ def rename_columns(df, rename_array):
             if k in c:
                 df.rename(columns = {c:v}  ,inplace=True)  
         
-    logger.info(f"Rename successfull")
+    #logger.info(f"Rename successfull")
     return df
 
 
@@ -95,7 +95,7 @@ def select_columns(df, match_pattern):
             if v in c:
                 icols.append(c)
     df = df[icols]
-    logger.info(f"Subset successfull")
+    #logger.info(f"Subset successfull")
     return df
     
 
@@ -114,9 +114,7 @@ def create_missing_columns(df, tabela):
         df['id_produto_ibge'] = 46657
     else:
         pass
-
-    print('Non existing columns created !')
-    logger.info(f"Create missing successfull")
+    #logger.info(f"Create missing successfull")
     return df
 
 def replace_values(df):
@@ -124,61 +122,73 @@ def replace_values(df):
     df["id_recorte_tempo"].replace({'1995': 7, '2006': 53, '2017': 108}, inplace=True)
     df["valor_original"].replace({'X': -999, '-': 0, r'..': -888, r'.':-777 , r'...':-666}, inplace=True)
     df["valor_original"].replace(r'\\.', 0, regex=True)
-    print('Values replaced')
-    logger.info(f"Replace successfull")
+    
+    #logger.info(f"Replace successfull")
     return df
 
 def order_columns(df, order):
     """Ordena as colunas"""    
     df = df[order]
-    logger.info(f"Ordering successfull")
+    #logger.info(f"Ordering successfull")
     return df
 
 def check_if_exists(bd_table , tabela, geo_adm, engine):
     """Return true if exists in the database and false it doesnt exists"""
     geo_adm_tabela = pd.read_sql_query(f'''SELECT * FROM ibge.{bd_table}  WHERE \"id_tabela_pesquisa\" = {tabela} and id_recortegeo_ibge = '{geo_adm}';''', engine)
     check = geo_adm_tabela.shape[0]!=0 
-    logger.info(f"Check successfull")
+    #logger.info(f"Check successfull")
     return check
 
 
 def database_upload(engine, schema, bd_table, api_query, match_pattern, rename_array, tabela, order, geo_adm):
     log_string = []    
-    if not check_if_exists(bd_table, tabela, geo_adm, engine):
+    if not check_if_exists(bd_table, tabela, geo_adm, engine):    
+
+
+        try:
+            """Sobe os dados na tabela especificada"""
+            s = fetch_data(url = api_query)
+        except BaseException as e:
+            logger.error(f'fetch_data() Error {e} at {api_query}')
+
+        try:
+            s = select_columns(df = s, match_pattern=match_pattern)
+        except BaseException as e:
+            logger.error(f'select_columns() Error {e} at {api_query}')
+
+        try:
+            s = rename_columns(df = s, rename_array = rename_array)
+        except BaseException as e:
+            logger.error(f'rename_columns() Error {e} at {api_query}')
+
+        try:
+            s = create_missing_columns(df = s, tabela = tabela)
+        except BaseException:
+            logger.error(f'create_missing_columns() Error {e} at {api_query}')
+
+        try:
+            s = replace_values(df = s)  
+        except BaseException as e:
+            logger.error(f'replace_values() Error {e} at {api_query}')
+
+        try:
+            s = order_columns(df = s, order = order) 
+        except BaseException as e:
+            logger.error(f'order_columns() Error {e} at {api_query}')
         
-
-
-
-        """Sobe os dados na tabela especificada"""
-        s = fetch_data(url = api_query)
-        s = select_columns(df = s, match_pattern=match_pattern)
-        s = rename_columns(df = s, rename_array = rename_array)
-        s = create_missing_columns(df = s, tabela = tabela)
-        s = replace_values(df = s)  
-        s = order_columns(df = s, order = order) 
-
-
-        
-
-          
-
         try:
             s.to_sql(con = engine, schema = schema, if_exists='append', index = False, name = bd_table)
             #print('Dados inseridos com sucesso')
             log_string = f'Dados inseridos com sucesso para tabela: {tabela} e geo_adm: {geo_adm}'
-            logger.info(f"Insert in database successfull at query {api_query}")
-            
-
-        except BaseException as err:
-            log_string =  'Hit exception:' + err
-            logger.info(f"Insert ERROR at query {api_query}")
+            print(f"Insert in database successfull at query {api_query}")
+        except BaseException as e:
+            logger.error(f'to_sql() Error {e} at {api_query}')
             
 
 
-    else:
-        log_string = 'Dados já presentes na tabela, skipping...'
-        print('Skipping...')
-        logging.info(f'Dados já existentes, skipping at {api_query}')
+    else:        
+        print(f'Dados já existentes, skipping at {api_query}')
+        
 
            
 
