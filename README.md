@@ -1,8 +1,7 @@
 # sidra-data-download
-This repo aims to download SIDRA data more automatically. 
+Esse repositório tem como objetivo criar uma rotina capaz de baixar os dados do SIDRA de forma automatica.
 
-For fitting the PostgreSQL database, designed for storing the data in this format:
-
+O ETL aqui realizado se ajusta ao esquema de banco de dados descrito na imagem a seguir
 
 
 
